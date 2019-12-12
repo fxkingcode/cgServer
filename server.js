@@ -7,9 +7,13 @@ var fs = require('fs');
 var url = require('url');
 var mime = require('mime');
 var User = require('./model/users.js');
+var Forum = require('./model/forums.js');
+var Comment = require('./model/comment.js');
+var ReComment = require('./model/recomment.js');
 var jwt = require('jsonwebtoken');
 let moment = require('moment');
 var Promise = require('promise');
+var autoIncrement = require('mongoose-auto-increment');
 var jwtSecret = 'secret';
 
 var server = http.createServer(app);
@@ -21,13 +25,11 @@ app.use(function(req, res, next) {
   var parsedUrl = url.parse(req.url);
   var resource = parsedUrl.pathname;
 
-  if (resource.indexOf('/uploads/') == 0) {
+  if (resource.indexOf('/uploads/') == 0 || resource.indexOf('/forums/') == 0 || resource.indexOf('/comments/') == 0) {
     // 4. 서비스 하려는 파일의 mime type
 
     var imgPath = resource.substring(1);
-    console.log('imgPath=' + imgPath);
     var imgMime = mime.getType(resource); // lookup -> getType으로 변경됨
-    console.log('mime=' + imgMime);
 
     fs.readFile(imgPath, function(error, data) {
       if (error) {
@@ -65,14 +67,12 @@ subject[8] = '이것은 토론 주제입니다 8'
 
 var test = [];
 
-var test2 = [];//AgreeOpinionComplete
+var test2 = []; //AgreeOpinionComplete
 
-var OfferSubject = function(room)
-{
-  if(test[room] === undefined)
-  {
+var OfferSubject = function(room) {
+  if (test[room] === undefined) {
     test[room] = subject[Math.floor(Math.random() * subject.length)];
-  }//test 나중에 방 터질 떄 다시 undefined로 돌려줘야함
+  } //test 나중에 방 터질 떄 다시 undefined로 돌려줘야함
 
   io.sockets.in(room).emit('OfferSubject', {
     subject: test[room],
@@ -86,14 +86,78 @@ io.sockets.on('connection', function(socket) {
   console.log("count : " + count);
 
   socket.on('disconnect', function() {
-     console.log('DISCONNESSO!!! ');
-     console.log("count : " + count);
-     count--;
+    console.log('DISCONNESSO!!! ');
+    console.log("count : " + count);
+    count--;
+  });
+
+  socket.on('RemoveForum', function(data) {
+    mongoose.model('forum').findOne({
+        idx: data
+      })
+      .remove()
+      .exec(function(err) {
+        if (err) {
+          socket.emit('RemoveForum', {
+            type: false,
+            data: "Error occured " + err
+          });
+        } else {
+          socket.emit('RemoveForum', {
+            type: true,
+            data: "remove"
+          });
+        }
+      });
+  });
+
+  socket.on('ForumRequest', function(data) {
+    var page = data;
+
+    mongoose.model('forum').find().sort( { "idx": -1 } ).skip((page-1)*10).limit(10).exec(function(err, doc) {
+        if(err)
+        {
+          console.log("에러 : " + err);
+          socket.emit('ForumResult', {
+            result: false
+          });
+        }
+        else {
+          socket.emit('ForumResult', {
+            result: true,
+            forum: doc
+          });
+        }
     });
+  });
+
+  socket.on('ReturnForum', function(data) {
+    mongoose.model('forum').findOne({
+        idx: data
+      })
+      .exec(function(err, forum) {
+        if (err) {
+          socket.emit('ReturnForum', {
+            type: false,
+            data: "Error occured " + err
+          });
+        } else if (!forum) {
+          socket.emit('ReturnForum', {
+            type: false,
+            data: "remove"
+          });
+        } else if (forum) {
+          socket.emit('ReturnForum', {
+            type: true,
+            data: forum
+          });
+        }
+      });
+  });
+
   socket.on('findroom', function(data) {
-    const makeroom = function()
-    {
-      return new Promise(function(resolve,reject){
+    const makeroom = function() {
+      return new Promise(function(resolve, reject) {
         for (var i = 0; i < 2; i++) {
           if (gamequeue[i] === null || gamequeue[i] === undefined) {
             gamequeue[i] = socket.id;
@@ -103,11 +167,9 @@ io.sockets.on('connection', function(socket) {
         resolve(gamequeue);
       });
     }
-    const makeroom2 = function(gamequeue)
-    {
-      return new Promise(function(resolve,reject){
-        if(gamequeue.length == 2)
-        {
+    const makeroom2 = function(gamequeue) {
+      return new Promise(function(resolve, reject) {
+        if (gamequeue.length == 2) {
           for (var i = 0; i < gamequeue.length; i++) {
             io.to(gamequeue[i]).emit('makeroom', {
               room: room_id
@@ -118,15 +180,14 @@ io.sockets.on('connection', function(socket) {
         }
       });
     }
-    const makeroom3 = function(gamequeue)
-    {
-      return new Promise(function(resolve,reject){
+    const makeroom3 = function(gamequeue) {
+      return new Promise(function(resolve, reject) {
         gamequeue = [];
         room_id++;
       });
     }
 
-    makeroom(true).then(makeroom2).then(function(result){
+    makeroom(true).then(makeroom2).then(function(result) {
       gamequeue = [];
       room_id++;
       console.log('makeroom');
@@ -141,7 +202,7 @@ io.sockets.on('connection', function(socket) {
     }, {
       $set: {
         Introduce: data.introduce,
-        Hobbit1: data.interset1,
+        Hobbit1: data.interest1,
         Hobbit2: data.interest2,
         Hobbit3: data.interest3
       }
@@ -168,9 +229,11 @@ io.sockets.on('connection', function(socket) {
   socket.on('findroomcancel', function(data) {
     var queueindex = gamequeue.indexOf(socket.id);
     gamequeue[queueindex] = null;
-    gamequeue.filter(function(val) {
+    gamequeue = gamequeue.filter(function(val) {
       return val !== null;
-    })
+    });
+
+    console.log("findroomcancel");
   });
 
   socket.on('defaultProfile', function(userEmail) {
@@ -200,6 +263,29 @@ io.sockets.on('connection', function(socket) {
     });
   });
 
+  socket.on('returnProfile', function(userEmail) {
+    mongoose.model('user').findOne({
+        Email: userEmail
+      })
+      .exec(function(err, user) {
+        if (err) {
+          socket.emit('returnProfile', {
+            type: false,
+            data: "Error occured " + err
+          });
+        } else if (!user) {
+          socket.emit('returnProfile', {
+            type: false,
+            data: "Incorrect email"
+          });
+        } else if (user) {
+          socket.emit('returnProfile', {
+            type: true,
+            data: user.Profile
+          });
+        }
+      });
+  });
   socket.on('returnUser', function(userEmail) {
 
     mongoose.model('user').findOne({
@@ -253,8 +339,7 @@ io.sockets.on('connection', function(socket) {
     socket.join(myroom);
   });
 
-  socket.on('joinroomsucces',function(data)
-  {
+  socket.on('joinroomsucces', function(data) {
     console.log("joinroomsucces : " + socket.id);
 
     socket.emit('ServerMessage', {
@@ -266,10 +351,9 @@ io.sockets.on('connection', function(socket) {
       date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
     });
 
-    if(test[socket.room] === undefined)
-    {
+    if (test[socket.room] === undefined) {
       test[socket.room] = subject[Math.floor(Math.random() * subject.length)];
-    }//test 나중에 방 터질 떄 다시 undefined로 돌려줘야함
+    } //test 나중에 방 터질 떄 다시 undefined로 돌려줘야함
 
     socket.emit('OfferSubject', {
       subject: test[socket.room],
@@ -281,8 +365,7 @@ io.sockets.on('connection', function(socket) {
     var userroom = socket.room;
     var userEmail = data.Email;
 
-    if(roomuserinfo[userroom] === undefined)
-    {
+    if (roomuserinfo[userroom] === undefined) {
       roomuserinfo[userroom] = {};
     }
 
@@ -293,41 +376,36 @@ io.sockets.on('connection', function(socket) {
 
     var obj_length = Object.keys(roomuserinfo[userroom]).length;
 
-    if(obj_length == 2)//나중에 room의 인원만큼으로 바꾸기
+    if (obj_length == 2) //나중에 room의 인원만큼으로 바꾸기
     {
       io.sockets.in(socket.room).emit('VoteComplete'); //자신포함 전체 룸안의 유저
 
       var opiarray = new Array();
       var y = 0;
 
-      for(var i in roomuserinfo[userroom])
-      {
-        if(roomuserinfo[userroom][i]['Opinion'] != 'giveup')
-        {
+      for (var i in roomuserinfo[userroom]) {
+        if (roomuserinfo[userroom][i]['Opinion'] != 'giveup') {
           opiarray[y] = roomuserinfo[userroom][i]['Opinion'];
           y++;
         }
       }
 
-      if(opiarray.length <= 1)//배열의 크기가 1보다 작거나 같다면 주제 다시 전송
+      if (opiarray.length <= 1) //배열의 크기가 1보다 작거나 같다면 주제 다시 전송
       {
         OfferSubject(socket.room);
         roomuserinfo[userroom] = {};
         test[socket.room] = undefined;
-      }
-      else {
+      } else {
         var pass = false;
-        for(var i = 0; i < opiarray.length-1;i++)
-        {
-          if(opiarray[i] != opiarray[i+1])//찬반이 한명이라도 다르면 게임 시작
+        for (var i = 0; i < opiarray.length - 1; i++) {
+          if (opiarray[i] != opiarray[i + 1]) //찬반이 한명이라도 다르면 게임 시작
           {
             pass = true;
             break;
           }
         }
 
-        if(pass == true)
-        {
+        if (pass == true) {
           console.log("게임시작");
           io.sockets.in(socket.room).emit('PresentationOrder', {
             time: 60000,
@@ -343,8 +421,7 @@ io.sockets.on('connection', function(socket) {
             nickname: "System",
             date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
           });
-        }
-        else {
+        } else {
           OfferSubject(socket.room);
           roomuserinfo[userroom] = {};
           test[socket.room] = undefined;
@@ -353,16 +430,14 @@ io.sockets.on('connection', function(socket) {
     }
   }); //찬성 반대 몰표가 아니라면 게임 시작 몰표라면 주제 재지정
 
-  socket.on('AgreeOpinionComplete', function(data){
+  socket.on('AgreeOpinionComplete', function(data) {
     console.log("AgreeOpinionComplete");
-    if(test2[socket.room] === undefined)
-    {
+    if (test2[socket.room] === undefined) {
       test2[socket.room] = 0
     }
     test2[socket.room]++;
 
-    if(test2[socket.room] == 2)
-    {
+    if (test2[socket.room] == 2) {
       io.sockets.in(socket.room).emit('PresentationOrder', {
         time: 60000,
         result: roomuserinfo[socket.room],
@@ -382,39 +457,12 @@ io.sockets.on('connection', function(socket) {
     }
   });
 
-  socket.on('OpposeOpinionComplete', function(data){
+  socket.on('OpposeOpinionComplete', function(data) {
     console.log("OpposeOpinionComplete");
 
     test2[socket.room]++;
 
-    if(test2[socket.room] == 2)
-    {
-      io.sockets.in(socket.room).emit('PresentationOrder', {
-        time: 180000,
-        result: roomuserinfo[socket.room],
-        order: "OpposeCounterComplete",
-        speaking: "oppose"
-      });
-      io.sockets.in(socket.room).emit('ServerMessage', {
-        type: "System",
-        data: "text",
-        content: "찬성 측 의견에 대한 반대 측 반론을 말해주십시오.",
-        email: "System",
-        nickname: "System",
-        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
-      });
-
-      test2[socket.room] = 0
-    }
-  });
-
-  socket.on('OpposeCounterComplete', function(data){
-    console.log("OpposeCounterComplete");
-
-    test2[socket.room]++;
-
-    if(test2[socket.room] == 2)
-    {
+    if (test2[socket.room] == 2) {
       io.sockets.in(socket.room).emit('PresentationOrder', {
         time: 180000,
         result: roomuserinfo[socket.room],
@@ -434,13 +482,37 @@ io.sockets.on('connection', function(socket) {
     }
   });
 
-  socket.on('AgreeCounterComplete', function(data){
+  socket.on('AgreeCounterComplete', function(data) {
     console.log("AgreeCounterComplete");
 
     test2[socket.room]++;
 
-    if(test2[socket.room] == 2)
-    {
+    if (test2[socket.room] == 2) {
+      io.sockets.in(socket.room).emit('PresentationOrder', {
+        time: 180000,
+        result: roomuserinfo[socket.room],
+        order: "OpposeCounterComplete",
+        speaking: "oppose"
+      });
+      io.sockets.in(socket.room).emit('ServerMessage', {
+        type: "System",
+        data: "text",
+        content: "찬성 측 의견에 대한 반대 측 반론을 말해주십시오.",
+        email: "System",
+        nickname: "System",
+        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
+      });
+
+      test2[socket.room] = 0
+    }
+  });
+
+  socket.on('OpposeCounterComplete', function(data) {
+    console.log("OpposeCounterComplete");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
       io.sockets.in(socket.room).emit('PresentationOrder', {
         time: 180000,
         result: roomuserinfo[socket.room],
@@ -465,6 +537,176 @@ io.sockets.on('connection', function(socket) {
     }
   });
 
+  socket.on('StrategicTimeComplete', function(data) {
+    console.log("StrategicTimeComplete");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
+      io.sockets.in(socket.room).emit('PresentationOrder', {
+        time: 180000,
+        result: roomuserinfo[socket.room],
+        order: "AgreeCounterComplete2",
+        speaking: "agree"
+      });
+      io.sockets.in(socket.room).emit('ServerMessage', {
+        type: "System",
+        data: "text",
+        content: "반대 측 의견에 대한 찬성 측 반론을 말해주십시오.",
+        email: "System",
+        nickname: "System",
+        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
+      });
+
+      test2[socket.room] = 0
+    }
+  });
+
+  socket.on('AgreeCounterComplete2', function(data) {
+    console.log("AgreeCounterComplete2");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
+      io.sockets.in(socket.room).emit('PresentationOrder', {
+        time: 180000,
+        result: roomuserinfo[socket.room],
+        order: "OpposeCounterComplete2",
+        speaking: "oppose"
+      });
+      io.sockets.in(socket.room).emit('ServerMessage', {
+        type: "System",
+        data: "text",
+        content: "찬성 측 의견에 대한 반대 측 반론을 말해주십시오.",
+        email: "System",
+        nickname: "System",
+        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
+      });
+
+      test2[socket.room] = 0
+    }
+  });
+
+  socket.on('OpposeCounterComplete2', function(data) {
+    console.log("OpposeCounterComplete2");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
+      io.sockets.in(socket.room).emit('PresentationOrder', {
+        time: 180000,
+        result: roomuserinfo[socket.room],
+        order: "StrategicTimeComplete2",
+        speaking: "all"
+      });
+
+      io.sockets.in(socket.room).emit('StrategicTime', {
+        roomuserinfo: roomuserinfo[socket.room]
+      });
+
+      io.sockets.in(socket.room).emit('ServerMessage', {
+        type: "System",
+        data: "text",
+        content: "작전 시간입니다.",
+        email: "System",
+        nickname: "System",
+        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
+      });
+
+      test2[socket.room] = 0
+    }
+  });
+
+  socket.on('StrategicTimeComplete2', function(data) {
+    console.log("StrategicTimeComplete2");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
+      io.sockets.in(socket.room).emit('PresentationOrder', {
+        time: 360000,
+        result: roomuserinfo[socket.room],
+        order: "FreeTalkTimeComplete",
+        speaking: "all"
+      });
+
+      io.sockets.in(socket.room).emit('ServerMessage', {
+        type: "System",
+        data: "text",
+        content: "자유 논박 시간입니다.",
+        email: "System",
+        nickname: "System",
+        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
+      });
+
+      test2[socket.room] = 0
+    }
+  });
+
+  socket.on('FreeTalkTimeComplete', function(data) {
+    console.log("FreeTalkTimeComplete");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
+      io.sockets.in(socket.room).emit('PresentationOrder', {
+        time: 90000,
+        result: roomuserinfo[socket.room],
+        order: "AgreeSummarizeComplete",
+        speaking: "all"
+      });
+
+      io.sockets.in(socket.room).emit('ServerMessage', {
+        type: "System",
+        data: "text",
+        content: "찬성 측의 의견을 요약하여 주십시오.",
+        email: "System",
+        nickname: "System",
+        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
+      });
+
+      test2[socket.room] = 0
+    }
+  });
+
+  socket.on('AgreeSummarizeComplete', function(data) {
+    console.log("AgreeSummarizeComplete");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
+      io.sockets.in(socket.room).emit('PresentationOrder', {
+        time: 90000,
+        result: roomuserinfo[socket.room],
+        order: "OpposeSummarizeComplete",
+        speaking: "all"
+      });
+
+      io.sockets.in(socket.room).emit('ServerMessage', {
+        type: "System",
+        data: "text",
+        content: "찬성 측의 의견을 요약하여 주십시오.",
+        email: "System",
+        nickname: "System",
+        date: moment().format("YYYY년 MM월 DD일 HH:mm:ss")
+      });
+
+      test2[socket.room] = 0
+    }
+  });
+
+  socket.on('OpposeSummarizeComplete', function(data) {
+    console.log("OpposeSummarizeComplete");
+
+    test2[socket.room]++;
+
+    if (test2[socket.room] == 2) {
+      console.log("게임끝");
+
+      test2[socket.room] = 0
+    }
+  });
+
   socket.on('leaveRoom', function(data) {
     socket.leave(socket.room); //룸퇴장
     socket.room = null;
@@ -475,42 +717,30 @@ io.sockets.on('connection', function(socket) {
     console.log("데이터 : " + data);
     data.date = moment().format("YYYY년 MM월 DD일 HH:mm:ss");
 
-    if(data.data == "Strategictext")
-    {
-      if(roomuserinfo[socket.room][data.email]['Opinion'] == "agree")
-      {
+    if (data.data == "Strategictext") {
+      if (roomuserinfo[socket.room][data.email]['Opinion'] == "agree") {
         data.data = "Strategictext_a";
-        for(var i in roomuserinfo[socket.room])
-        {
-          if(roomuserinfo[socket.room][i]['Opinion'] == "agree")
-          {
-            io.to(roomuserinfo[socket.room][i]['Socketid']).emit('ServerMessage',data);
+        for (var i in roomuserinfo[socket.room]) {
+          if (roomuserinfo[socket.room][i]['Opinion'] == "agree") {
+            io.to(roomuserinfo[socket.room][i]['Socketid']).emit('ServerMessage', data);
           }
         }
-      }
-      else if(roomuserinfo[socket.room][data.email]['Opinion'] == "oppose")
-      {
+      } else if (roomuserinfo[socket.room][data.email]['Opinion'] == "oppose") {
         data.data = "Strategictext_o";
-        for(var i in roomuserinfo[socket.room])
-        {
-          if(roomuserinfo[socket.room][i]['Opinion'] == "oppose")
-          {
-            io.to(roomuserinfo[socket.room][i]['Socketid']).emit('ServerMessage',data);
+        for (var i in roomuserinfo[socket.room]) {
+          if (roomuserinfo[socket.room][i]['Opinion'] == "oppose") {
+            io.to(roomuserinfo[socket.room][i]['Socketid']).emit('ServerMessage', data);
           }
         }
-      }
-      else {
+      } else {
         data.data = "Strategictext_g";
-        for(var i in roomuserinfo[socket.room])
-        {
-          if(roomuserinfo[socket.room][i]['Opinion'] == "giveup")
-          {
-            io.to(roomuserinfo[socket.room][i]['Socketid']).emit('ServerMessage',data);
+        for (var i in roomuserinfo[socket.room]) {
+          if (roomuserinfo[socket.room][i]['Opinion'] == "giveup") {
+            io.to(roomuserinfo[socket.room][i]['Socketid']).emit('ServerMessage', data);
           }
         }
       }
-    }
-    else {
+    } else {
       io.sockets.in(socket.room).emit('ServerMessage', data); //자신포함 전체 룸안의 유저
     }
   });
@@ -524,11 +754,17 @@ io.sockets.on('connection', function(socket) {
 
 var login = require('./routes/login.js')(app, User);
 var signup = require('./routes/signup.js')(app, User);
+var writeforum = require('./routes/writeforum.js')(app, Forum);
+var writecomment = require('./routes/writecomment.js')(app, Comment);
+var writerecomment = require('./routes/writerecomment.js')(app, ReComment);
 var uploadprofile = require('./routes/uploadprofile.js')(app, User);
 
 app.use('/login', login);
 app.use('/signup', signup);
 app.use('/uploadprofile', uploadprofile);
+app.use('/writeforum', writeforum);
+app.use('/writecomment', writecomment);
+app.use('/writerecomment', writerecomment);
 
 // CONNECT TO MONGODB SERVER
 var db = mongoose.connection;
@@ -538,6 +774,7 @@ db.once('open', function() {
   console.log("Connected to mongod server");
 });
 
-mongoose.connect('mongodb://localhost:27017/chatground_user', {
+var connect = mongoose.connect('mongodb://localhost:27017/chatground_user', {
   useNewUrlParser: true
 });
+mongoose.set('useFindAndModify', false);

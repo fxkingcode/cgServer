@@ -19,7 +19,7 @@ const upload = multer(
         filename: function (req, file, cb) {
           var email = req.body.Email;
           email = email.replace(/\"/gi, "");
-          cb(null, Date.now() + "_" + email + path.extname(file.originalname));
+          cb(null, email + "_profile.jpg");
           req.Email = email;
         }
     }),
