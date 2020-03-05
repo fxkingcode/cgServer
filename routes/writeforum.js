@@ -57,7 +57,6 @@ module.exports = function(app, Forum) {
     newforum.Title = F_Title;
     newforum.Subject = F_Subject;
     newforum.Content = F_Content;
-    newforum.Recommend = 0;
     newforum.ImageNum = req.body.ImageNum;
 
     if(req.body.ImageNum == 1)

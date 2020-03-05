@@ -5,7 +5,7 @@ module.exports = function(app, ReComment) {
   var mongoose = require('mongoose');
   const multer = require('multer');
   const path = require('path');
-  var Board = require('../model/forums.js');
+  var Forum = require('../model/forums.js');
 
   app.use(bodyParser.urlencoded({
     extended: false
@@ -34,6 +34,8 @@ module.exports = function(app, ReComment) {
     var F_idx = req.body.ForumIdx;
     var RC_commentuid = req.body.CommentUid;
 
+    console.log("데이터 : " + JSON.stringify(req.body));
+
     RC_Email = RC_Email.replace(/\"/gi, "");
     RC_Nickname = RC_Nickname.replace(/\"/gi, "");
     RC_Content = RC_Content.replace(/\"/gi, "");
@@ -50,14 +52,23 @@ module.exports = function(app, ReComment) {
       recomment.recomment_Imagepath = req.file.path;
     }
 
-    Board.findOneAndUpdate({
+    Forum.findOneAndUpdate({
       "idx": F_idx,
-      "Comments._id": RC_commentuid
-    },{ $push: { ReComments : recomment}}, {
-      upsert: true
+      "Comments._id": {
+        "$in": [RC_commentuid]
+      }
+    }, {
+      $push: {
+        "Comments.$[el].ReComments": recomment
+      },
+      $inc: { "CommentNum": 1 }
+    }, {
+      arrayFilters: [{
+        "el._id": RC_commentuid
+      }],
     }, function(err, forum) {
       if (err) {
-        console.log("comment에러 : " + err);
+        console.log("forum에러 : " + err);
         res.json({
           type: false,
           data: err
@@ -69,7 +80,7 @@ module.exports = function(app, ReComment) {
           data: "empty forum"
         });
       } else {
-        console.log("recomment성공");
+        console.log("recomment성공 : " + JSON.stringify(forum));
         res.json({
           type: true,
         });

@@ -11,20 +11,19 @@ module.exports = function(app, Comment) {
     extended: false
   }));
 
-  const upload = multer(
-    {
-      storage: multer.diskStorage({
-          destination: function (req, file, cb) {
-          cb(null, 'comments/');
-          },
-          filename: function (req, file, cb) {
-            var email = req.body.Email;
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: function(req, file, cb) {
+        cb(null, 'comments/');
+      },
+      filename: function(req, file, cb) {
+        var email = req.body.Email;
 
-            email = email.replace(/\"/gi, "");
-            cb(null, Date.now() + "_" + email + path.extname(file.originalname));
-          }
-      }),
-    });
+        email = email.replace(/\"/gi, "");
+        cb(null, Date.now() + "_" + email + path.extname(file.originalname));
+      }
+    }),
+  });
 
   router.post('/', upload.single('upload'), (req, res) => {
     var C_Email = req.body.Email;
@@ -46,23 +45,30 @@ module.exports = function(app, Comment) {
     comment.Nickname = C_Nickname;
     comment.IsImage = C_IsImage;
 
-    if(C_IsImage == "true")
-    {
+    if (C_IsImage == "true") {
       comment.comment_Imagepath = req.file.path;
     }
 
-    Board.findOneAndUpdate({idx : F_idx}, { $push: { Comments : comment}}, {upsert:true}, function (err, forum) {
-      if(err){
-          console.log("comment에러 : "+ err);
-          res.json({
-            type:false,
-            data:err
-          });
-      }
-      else {
+    Board.findOneAndUpdate({
+      idx: F_idx
+    }, {
+      $push: {
+        Comments: comment
+      },
+      $inc: { "CommentNum": 1 }
+    }, {
+      upsert: true
+    }, function(err, forum) {
+      if (err) {
+        console.log("comment에러 : " + err);
+        res.json({
+          type: false,
+          data: err
+        });
+      } else {
         console.log("comment성공");
         res.json({
-          type:true,
+          type: true,
         });
       }
     });
