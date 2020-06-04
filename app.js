@@ -11,9 +11,9 @@ const autoIncrement = require('mongoose-auto-increment');
 
 //라우터
 const indexRouter = require('./routes/index');//인덱스라우터
-const authRouter = require('./routes/auth');//회원가입,로그인 등등
-const forumRouter = require('./routes/forum');//글작성,보기,수정,삭제,댓글
-const profileRouter = require('./routes/profile');//유저 정보 보기,수정,프로필
+const authRouter = require('./routes/auth');//로그인
+const usersRouter = require('./routes/users');//회원가입 등등
+const forumsRouter = require('./routes/forums');//글작성,보기,수정,삭제,댓글
 
 const app = express();
 
@@ -25,6 +25,7 @@ const io = socketio.listen(Server);
 require('./routes/socket')(io);
 
 app.use(function(req, res, next) {
+
   var parsedUrl = url.parse(req.url);
   var resource = parsedUrl.pathname;
 
@@ -58,8 +59,8 @@ app.use(express.urlencoded({ extended: false }));
 //라우터 주소 설정
 app.use('/', indexRouter);
 app.use('/auth', authRouter);
-app.use('/forum', forumRouter);
-app.use('/profile', profileRouter);
+app.use('/users', usersRouter);
+app.use('/forums', forumsRouter);
 
 // CONNECT TO MONGODB SERVER
 mongoose.Promise = global.Promise;
