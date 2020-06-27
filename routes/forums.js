@@ -461,13 +461,20 @@ router.patch('/:idx', upload.array('img', 5), (req, res) => {
   var imageUrl = new Array();
 
   if (req.body.imageUrl) {
-    var bodyPathArray = req.body.imageUrl
+    console.log(typeof(req.body.imageUrl));
+    if(typeof(req.body.imageUrl) == 'string') {
+      var bodyPathArray = new Array(req.body.imageUrl);
+    }else{
+      var bodyPathArray = req.body.imageUrl;
+    }
 
     for (var i = 0; i < req.files.length; i++) {
       filePathArray[i] = req.files[i].path;
     }
+    console.log("imageUrl1 : " + bodyPathArray);
 
     imageUrl = bodyPathArray.concat(filePathArray);
+    console.log("imageUrl2 : " + imageUrl);
   } else {
     for (var i = 0; i < req.files.length; i++) {
       imageUrl[i] = req.files[i].path;

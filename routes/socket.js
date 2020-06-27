@@ -43,28 +43,19 @@ module.exports = (io) => {
         return user._id == data.user
       });
 
-      data.date = moment();
-      data.user = messageUser[0];
-
-      if (data.type == "strategic") {
-        if (data.content == "image" || data.content == "video") {
-          data.type = data.content;
-          io.sockets.in(data.room).emit('message', data);
-        } else {
-          roomInfo[data.room].users.forEach(user => {
-            if (user.opinion == messageUser[0].opinion) {
-              io.to(user.socket).emit('message', data);
-            }
-          });
-        }
+      var user = Object()
+      user.type = data.type;
+      user.content = data.content;
+      user.date = moment();
+      user.user = messageUser[0];
+      if(data.binaryData) {
+        user.binaryData = data.binaryData;
       }
 
-      if (data.type == "text") {
-        io.sockets.in(data.room).emit('message', data); //자신포함 전체 룸안의 유저
-      }
-
-      if (data.type == "image" || data.type == "video") {
-        io.sockets.in(data.room).emit('message', data);
+      if (user.type == "strategicText" || user.type == "strategicImage" || user.type == "strategicVideo") {
+        io.to(user.socket).emit('message', user);
+      }else{
+        io.sockets.in(data.room).emit('message', user);
       }
     });
 
@@ -170,7 +161,6 @@ module.exports = (io) => {
           });
           io.sockets.in(data.room).emit('presentationOrder', {
             time: 60000,
-            users: roomInfo[data.room].users,
             order: "agreePresentationComplete",
             speaking: "agree"
           });
@@ -212,7 +202,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 60000,
-          users: roomInfo[data.room].users,
           order: "opposePresentationComplete",
           speaking: "oppose"
         });
@@ -246,7 +235,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 180000,
-          users: roomInfo[data.room].users,
           order: "agreeCounterComplete",
           speaking: "agree"
         });
@@ -280,7 +268,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 180000,
-          users: roomInfo[data.room].users,
           order: "opposeCounterComplete",
           speaking: "oppose"
         });
@@ -314,7 +301,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 180000,
-          users: roomInfo[data.room].users,
           order: "strategicTimeComplete",
           speaking: "all"
         });
@@ -348,7 +334,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 180000,
-          users: roomInfo[data.room].users,
           order: "agreeCounterComplete2",
           speaking: "agree"
         });
@@ -382,7 +367,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 180000,
-          users: roomInfo[data.room].users,
           order: "opposeCounterComplete2",
           speaking: "oppose"
         });
@@ -416,7 +400,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 180000,
-          users: roomInfo[data.room].users,
           order: "strategicTimeComplete2",
           speaking: "all"
         });
@@ -450,7 +433,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 360000,
-          users: roomInfo[data.room].users,
           order: "freeTalkTimeComplete",
           speaking: "all"
         });
@@ -484,7 +466,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 90000,
-          users: roomInfo[data.room].users,
           order: "agreeSummarizeComplete",
           speaking: "agree"
         });
@@ -518,7 +499,6 @@ module.exports = (io) => {
         });
         io.sockets.in(data.room).emit('presentationOrder', {
           time: 90000,
-          users: roomInfo[data.room].users,
           order: "opposeSummarizeComplete",
           speaking: "oppose"
         });
